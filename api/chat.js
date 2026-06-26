@@ -1,51 +1,109 @@
 export default async function handler(req, res) {
+  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
 
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({
+      error: "Method not allowed",
+    });
   }
 
   try {
     const { message } = req.body;
 
-    const response = await fetch("https://api.openai.com/v1/responses", {
+    if (!message) {
+      return res.status(400).json({
+        error: "Mesaj boş olamaz.",
+      });
+    }
+
+    const openaiResponse = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-4.1-mini",
+        model: "gpt-5-mini",
         input: [
           {
             role: "system",
-            content:
-              "Sen Kutubak'ın yapay zeka satış danışmanısın. Kutubak; kuyumcu kutuları, takı kutuları, promosyon çantaları ve kuyumcu atölye ekipmanları satar. Türkçe konuş. Kısa, net, güven veren cevaplar ver. Fiyat, stok veya teslim tarihi kesin bilmiyorsan uydurma; adet, model, logo baskısı ve teslimat şehri iste. Teklif isteyen müşteriyi WhatsApp'a yönlendir."
+            content: `
+Sen Kutubak'ın resmi yapay zeka satış danışmanısın.
+
+Kurallar:
+- Her zaman Türkçe konuş.
+- Kısa, profesyonel ve güven veren cevaplar ver.
+- Kutubak;
+  • Kuyumcu kutuları
+  • Takı kutuları
+  • Yüzük kutuları
+  • Kolye kutuları
+  • Küpe kutuları
+  • Saat kutuları
+  • Promosyon çantaları
+  • Kuyumcu poşetleri
+  • Kurdele
+  • Kuyumcu atölye ekipmanları
+  • Kuyumcu makineleri
+  satmaktadır.
+
+Eğer müşteri fiyat sorarsa;
+- Modeli
+- Adedi
+- Logo baskısı olup olmadığını
+- Teslimat şehrini
+
+öğrenmeden fiyat verme.
+
+Bilmediğin hiçbir bilgiyi uydurma.
+
+Teklif isteyen müşterileri nazikçe WhatsApp satış hattına yönlendir.
+
+Her zaman müşteri odaklı ol.
+            `,
           },
           {
             role: "user",
-            content: message || "Merhaba"
-          }
-        ]
+            content: message,
+          },
+        ],
       }),
     });
 
-    const data = await response.json();
+    const data = await openaiResponse.json();
+
+    if (!openaiResponse.ok) {
+      console.error(data);
+
+      return res.status(500).json({
+        error: data.error?.message || "OpenAI hatası oluştu.",
+      });
+    }
 
     const reply =
       data.output_text ||
-      data.output?.[0]?.content?.[0]?.text ||
-      "Şu anda cevap oluşturamadım. Lütfen tekrar deneyin.";
+      data.output
+        ?.flatMap((item) => item.content || [])
+        ?.map((item) => item.text || "")
+        ?.join("") ||
+      "Üzgünüm, şu anda cevap oluşturamadım.";
 
-    return res.status(200).json({ reply });
-  } catch (error) {
+    return res.status(200).json({
+      reply,
+    });
+  } catch (err) {
+    console.error(err);
+
     return res.status(500).json({
-      error: "Kutubak AI sunucu hatası",
-      detail: error.message,
+      error: "Sunucu hatası oluştu.",
+      detail: err.message,
     });
   }
 }
